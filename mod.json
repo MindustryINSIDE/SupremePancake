@@ -1,0 +1,9 @@
+{
+    "name": "supreme-pancake",
+    "displayName": "Supreme Pancake",
+    "description": "",
+    "author": "[#c1f9b6]Mindustry Inside",
+    "main": "pancake.SupremePancake",
+    "version": "1.0.0",
+    "minGameVersion": 105
+}
