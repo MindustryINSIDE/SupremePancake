@@ -33,20 +33,26 @@ import static mindustry.Vars.*;
 public class TileTurret extends Turret {
     public BulletType shootType;
     /** Время раскрутки стволов */
-    public float chargeTime = 30f;
+    public float chargeTime = 90f;
+    public float chargeSpeed = 0.02F;
+    /** Время активации турели */
+    public float deployTime = 60f;
+    public float deploySpeed;
     /** Кол-во стволов по окружности турели */
     public int barrelsAmount = 4;
     public TextureRegion shadowRegion;
+    //public TextureRegion outlineFrameRegion;
 
-    public  TileTurret(String name) {
+    public TileTurret(String name) {
         super(name);
         destructible = false;
         solid = false;
         solidifes = true;
-        breakable = alwaysReplace = false;
+        breakable = false;
+        alwaysReplace = false;
         targetAir = false;
         targetGround = true;
-        outlineIcon = false;
+        outlineIcon = true;
         hasShadow = false;
         acceptCoolant = false;
         buildType = TileTurretBuild::new;
@@ -57,6 +63,7 @@ public class TileTurret extends Turret {
         super.load();
         region = atlas.find(this.name);
         shadowRegion = atlas.find(this.name + "-shadow");
+        //outlineFrameRegion = atlas.find(this.name + "-outline-frame");
     }
 
     @Override
@@ -79,6 +86,7 @@ public class TileTurret extends Turret {
     public class TileTurretBuild extends TurretBuild {
         public boolean activated = false;
         public Seq<TurretBarrel> barrels = new Seq<>();
+        public float deployProgress, chargeProcess = 0;
 
         public void activate() {
             activated = true;
@@ -116,23 +124,25 @@ public class TileTurret extends Turret {
         public void draw() {
             if (activated) {
                 Draw.z(Layer.block - 1);
-                //Draw.z(Layer.light);
                 //Draw.color(Color.black);
                 //Fill.square(x, y, size * tilesize / 2f);
                 //Draw.color();
+                Draw.color(Color.white.cpy().a(deployProgress / deployTime));
                 Draw.rect(shadowRegion, x, y); // костыль с динамическими тенями
                 Drawf.shadow(floor().region, x - size * 1.5f, y - size * 1.5f);
 
                 Draw.z(Layer.turret);
+                Draw.color();
                 barrels.each(this::drawBarrel);
                 //drawBarrel(barrels.first());
                 if(heatRegion != atlas.find("error")) barrels.each(this::drawBarrelHeat);
 
                 Draw.z(Layer.effect + 0.01f);
                 Draw.rect(floor().region, x, y); // отображаем верхушку только когда она... сверху (для правильной работы теней)
-                Draw.color(Color.coral); // delta от black к coral
+                //Draw.rect(outlineFrameRegion, x, y);
+                Draw.color(Color.coral.cpy().a(deployProgress / deployTime));
                 Draw.rect(atlas.find("block-middle"), x, y);
-                Draw.color();
+                Draw.reset();
             }
         }
 
@@ -274,7 +284,7 @@ public class TileTurret extends Turret {
                     tr.trns(rotation, size * tilesize / 2f, Mathf.range(xRand));
 
                     for(int i = 0; i < shots; i++){
-                        ////bullet(type, rotation + Mathf.range(inaccuracy + type.inaccuracy) + (i - (int)(shots / 2f)) * spread);
+                        bullet(type, rotation + Mathf.range(inaccuracy + type.inaccuracy) + (i - (int)(shots / 2f)) * spread);
                     }
                 }
 
@@ -291,7 +301,7 @@ public class TileTurret extends Turret {
             Effect fsmokeEffect = smokeEffect == Fx.none ? peekAmmo().smokeEffect : smokeEffect;
 
             barrels.each(b -> {
-                tr.trns(b.baseAngle + rotation, size * tilesize / 2f + 2);
+                tr.trns(b.baseAngle + rotation, size * tilesize / 2f + 3 /* корректировка позиции конца ствола */);
                 fshootEffect.at(x + tr.x, y + tr.y, b.baseAngle + rotation);
                 fsmokeEffect.at(x + tr.x, y + tr.y, b.baseAngle + rotation);
             });
