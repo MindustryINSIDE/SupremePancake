@@ -5,10 +5,11 @@ import mindustry.gen.*;
 import mindustry.entities.bullet.MissileBulletType;
 
 /**
- *
+ * Стоит не забывать, что у каждой ракеты два региона, передний и задний.
+ * А это значит, что надо <b>2</> текстуры на ракету
  */
 public class Missile extends /* летит летит ракета и тут её Сегмент уничтожает*/ MissileBulletType {
-    public String name;
+    public String name; // Так как у пуль нет названия, то мы его тут ставим, хотя хз даже нужно ли
 
     public Missile(float speed, float damage, String bulletSprite){
         super(speed, damage, bulletSprite);
@@ -22,9 +23,5 @@ public class Missile extends /* летит летит ракета и тут е�
         hitSound = Sounds.explosion;
         trailChance = 0.2f;
         lifetime = 49f;
-    }
-
-    public Missile(float speed, float damage){
-        this(speed, damage, "missile");
     }
 }

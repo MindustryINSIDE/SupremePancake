@@ -1,18 +1,28 @@
 package pancake.world.blocks;
 
 import arc.Core;
+import arc.func.Boolf;
+import arc.func.Cons;
+import arc.func.Prov;
 import arc.graphics.Color;
 import arc.graphics.g2d.Draw;
 import arc.math.Mathf;
+import arc.math.geom.Position;
+import arc.math.geom.Vec2;
+import arc.scene.style.Drawable;
 import arc.scene.style.TextureRegionDrawable;
+import arc.scene.ui.ButtonGroup;
+import arc.scene.ui.ImageButton;
+import arc.scene.ui.ScrollPane;
+import arc.scene.ui.layout.Scl;
 import arc.scene.ui.layout.Table;
+import arc.struct.Queue;
 import arc.struct.Seq;
 import arc.util.*;
+import mindustry.content.Bullets;
 import mindustry.entities.bullet.BulletType;
 import mindustry.entities.units.BuildPlan;
-import mindustry.gen.Building;
-import mindustry.gen.Icon;
-import mindustry.gen.Iconc;
+import mindustry.gen.*;
 import mindustry.graphics.Drawf;
 import mindustry.graphics.Layer;
 import mindustry.graphics.Pal;
@@ -21,9 +31,15 @@ import mindustry.type.ItemStack;
 import mindustry.ui.Bar;
 import mindustry.ui.Cicon;
 import mindustry.ui.Fonts;
+import mindustry.ui.Styles;
 import mindustry.world.Block;
+import mindustry.world.blocks.ItemSelection;
+import mindustry.world.blocks.defense.turrets.Turret;
 import mindustry.world.consumers.ConsumeItemDynamic;
 import pancake.Missile;
+
+import javax.sound.midi.MidiChannel;
+import javax.xml.namespace.QName;
 
 import static arc.Core.atlas;
 import static mindustry.Vars.*;
@@ -62,20 +78,25 @@ import static mindustry.Vars.*;
  * Далее управление передаётся ракете.
  */
 public class RocketSilo extends Block {
-    /** Готовая ракета*/
+    /** Готовая ракета */
     @Nullable
     public BulletType shootType;
     /** Вместимость предметов для конкретного типа ракеты */
     public int[] capacities;
-    /** Максимальное кол-во хранимых боеголовок */
-    public int siloCapacity = 3;
     /** Виды производимых боеголовок */
-    public Seq<BulletPlan> plans = new Seq<>(siloCapacity);
+    public Seq<BulletPlan> plans = new Seq<>();
+    /** Минимальный радиус стрельбы */
+    public float minRange;
+
+    /** Для стрельбы, зависит от игрока */
+    protected Vec2 tr = new Vec2();
 
     public RocketSilo(String name){
         super(name);
         configurable = true;
         rotate = true;
+        minRange = 10f;
+        hasPower = true;
 
         config(Integer.class, (RocketSiloBuild tile, Integer i) -> {
             tile.currentPlan = i < 0 || i >= plans.size ? -1 : i;
@@ -88,6 +109,7 @@ public class RocketSilo extends Block {
         });
 
         consumes.add(new ConsumeItemDynamic((RocketSiloBuild e) -> e.currentPlan != -1 ? plans.get(e.currentPlan).requirements : ItemStack.empty));
+
     }
 
     @Override
@@ -131,6 +153,8 @@ public class RocketSilo extends Block {
     }
 
     public class RocketSiloBuild extends Building{
+        /** Позиция скролла списочка */
+        private float scrollPos = 0f;
         /** Позиция плана */
         public int currentPlan = -1;
         public float progress, time, speedScl;
@@ -150,13 +174,16 @@ public class RocketSilo extends Block {
                 speedScl = Mathf.lerpDelta(speedScl, 0f, 0.05f);
             }
 
-            if(currentPlan != -1 && shootType == null){
+            moveUpMissile();
+
+            if(currentPlan != -1 && shootType != null){
                 BulletPlan plan = plans.get(currentPlan);
 
                 if(progress >= plan.time && consValid()){
                     progress = 0f;
 
-                    // Тут производится пуля и после стекуется
+                    shootType = missile();
+
                     consume();
                 }
 
@@ -166,46 +193,153 @@ public class RocketSilo extends Block {
             }
         }
 
+        /** Отрисовка поднимающиейся из шахты ракеты */
+        public void moveUpMissile(){
+            if(shootType == null) return;
+
+            // TODO сделать блять отрисовку
+        }
+
         /** Возвращает тип производимой сейчас пули */
         @Nullable
         public BulletType missile(){
-            return currentPlan == - 1 ? null : plans.get(currentPlan).bulletType;
+            return currentPlan == -1 ? null : plans.get(currentPlan).bulletType;
         }
 
+        /** Интерфейс с выбором */
+        @Override
+        public void buildConfiguration(Table table){
+            if(shootType == null){
+                Seq<Missile> types = plans.map(p -> (Missile) p.bulletType);
+
+                buildTable(
+                        table, types,
+                        () -> currentPlan == -1 ? null : (Missile) plans.get(currentPlan).bulletType,
+                        m -> configure(plans.indexOf(u -> u.bulletType == m))
+                );
+            }else{ // Делаем меню управления, ибо ракета готова
+                assert true; //
+            }
+        }
+
+        /**
+         * Рисовалка выборщика
+         * (Лучше переместить в другое место)
+         */
+        public <T extends BulletType> void buildTable(Table table, Seq<T> items,  Prov<T> holder, Cons<T> consumer){
+            ButtonGroup<ImageButton> group = new ButtonGroup<>();
+            group.setMinCheckCount(0);
+            Table cont = new Table();
+            cont.defaults().size(40);
+
+            int i = 0;
+
+            for(T item : items) {
+                ImageButton button = cont.button(Tex.whiteui, Styles.clearToggleTransi, 24, () -> {
+                    control.input.frag.config.hideConfig();
+                }).group(group).get();
+                button.changed(() -> consumer.get(button.isChecked() ? item : null));
+                button.getStyle().imageUp = new TextureRegionDrawable(((Missile)item).frontRegion);
+                button.update(() -> button.setChecked(holder.get() == item));
+
+                if (i++ % 4 == 3) {
+                    cont.row();
+                }
+            }
+
+            if(i % 4 != 0){
+                int remaining = 4 - (i % 4);
+                for(int j = 0; j < remaining; j++){
+                    cont.image(Styles.black6);
+                }
+            }
+
+            ScrollPane pane = new ScrollPane(cont, Styles.smallPane);
+            pane.setScrollingDisabled(true, false);
+            pane.setScrollYForce(scrollPos);
+            pane.update(() -> {
+                scrollPos = pane.getScrollY();
+            });
+
+            pane.setOverscroll(false, false);
+            table.add(pane).maxHeight(Scl.scl(40 * 5));
+        }
+
+        /** Отрисовка самой постройки, а так же ракеты внутри */
         @Override
         public void draw(){
-            /*Draw.rect(region, x, y);                     Отрисовка вжик-вжика или тип того
-            Draw.rect(missile()., x, y, rotdeg());
+            Draw.rect(region, x, y);
 
             if(currentPlan != -1){
+                // Вжик-вжик
                 BulletPlan plan = plans.get(currentPlan);
-                Draw.draw(Layer.blockOver, () -> Drawf.construct(this, plan.bulletType, rotdeg() - 90f, progress / plan.time, speedScl, time));
+                Draw.draw(Layer.blockOver, () -> {
+                    Drawf.construct(this, ((Missile) plan.bulletType).frontRegion, rotdeg() - 90f,
+                            progress / plan.time, speedScl, time);
+                });
             }
 
             Draw.z(Layer.blockOver);
 
-            payRotation = rotdeg();
-            drawPayload();
+            drawMissile();
 
             Draw.z(Layer.blockOver + 0.1f);
-
-
-
-            Draw.rect(topRegion, x, y);*/
         }
 
-        /** Отрисовка ракеты */
-        public void drawPayload(){
-            /*if(sho != null){
-                payload.set(x + payVector.x, y + payVector.y, payRotation);
-
-                Draw.z(Layer.blockOver);
-                payload.draw();
-            }*/
+        /** Отрисовка ракеты собственно */
+        public void drawMissile(){
+            if(missile() != null){
+                Draw.z(Layer.blockOver); // чё эта? Это высота (3D) для корректного пересечения объектов отрисовки
+                // Движок то трёхмерный  аааааааааааааа, я прост не думал что именно тут про это
+                // Core.app,post(() -> Log.info("СделОй эффекты шоль")); // run
+                Draw.rect(((Missile) missile()).frontRegion, x, y);
+            }
         }
 
-        //резко вклинивается Феликс
-        protected void spawnMissle(Float destinationX, Float destinationY){}
+
+        /* public boolean hasAmmo() {
+            return стек_ракет.size > 0;
+        }
+
+        public void useAmmo() {
+            Missle ракета = стек_ракет.first();
+            стек_ракет.first().pop(); // И далее сдвиг стека или как он там работкает хуй знает
+            spawnMissile(destinationX, destinationY);
+            ejectEffects(); // Если таковые вообще будут со стороны самой Турели (например, откидывание крышки, (которой нет))
+        } */
+
+        /** Спавн и в то же время погибель пули */
+        protected void spawnMissile(float destX, float destY){
+            Bullet bullet = shootType.create(null, team, destX, destY, 0f);
+
+            bullet.draw(); // А это что такое
+
+            // . . . Эфекты тут
+
+            bullet.remove();
+
+            Timer.schedule(() -> {
+                Call.infoToast("ВНИМАЕНИЕ, НА ВАС ЛЕТИТ САС", 1337);
+            }, 0, 3, 3);
+
+            Call.createBullet(shootType, team, destX, destY, 0f, shootType.damage, 0f, 0f);
+
+            shootType = null; // Говорим остановитЯЗЬ
+        }
+
+        /** Условие потреблядства */
+        @Override
+        public boolean shouldConsume(){
+            if(currentPlan == -1) return false;
+            return enabled && shootType == null;
+        }
+
+        /** Принятие ресов на постройку */
+        @Override
+        public boolean acceptItem(Building source, Item item){
+            return currentPlan != -1 && items.get(item) < getMaximumAccepted(item) &&
+                   Structs.contains(plans.get(currentPlan).requirements, stack -> stack.item == item);
+        }
 
         @Override
         public int getMaximumAccepted(Item item){

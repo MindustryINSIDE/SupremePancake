@@ -34,7 +34,6 @@ public class SupremePancake extends Mod{
     public void loadContent(){
         Log.info("[green][[SupremePancake][] loading...");
 /*
-        // Это для инициализации ракеты как пули
         explosiveMissile = new Missile(0, 0, "error"){{
             width = 8f;
             height = 8f;
@@ -50,8 +49,6 @@ public class SupremePancake extends Mod{
             statusDuration = 60f;
         }};
 
-        // Я думаю сами ракеты лучше в конструкторе шахты задавать, так же как снаряды задаются у турелей (чекни Blocks.java)
-
         rocketSilo = new RocketSilo("rocket-silo"){{
             requirements(Category.effect, /*-> временно*//* with(Items.copper, 35));
             plans = Seq.with(
@@ -59,6 +56,7 @@ public class SupremePancake extends Mod{
                     new BulletPlan(hydrogenMissile, 60f * 12, with(Items.silicon, 10, Items.coal, 20)),
                     new BulletPlan(explosiveMissile, 60f * 40, with(Items.silicon, 30, Items.lead, 20, Items.titanium, 20))
             ); // Тут задаются все варианты ракет
+            consumes.power(2f);
             size = 6;
         }};
 */
@@ -69,7 +67,7 @@ public class SupremePancake extends Mod{
             range = 80.0f;
             rotateSpeed = 5.0f;
             maxAmmo = 30;
-            chargeTime = 90f;
+            warmupTime = 90f;
             deployTime = 60f;
             barrelsAmount = 3;
             reloadTime = 3f;

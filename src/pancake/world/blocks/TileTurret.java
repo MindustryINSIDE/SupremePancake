@@ -1,5 +1,6 @@
 package pancake.world.blocks;
 
+import arc.func.Floatf;
 import arc.graphics.*;
 import arc.graphics.g2d.*;
 import arc.math.*;
@@ -12,6 +13,7 @@ import mindustry.entities.bullet.*;
 import mindustry.graphics.*;
 import mindustry.world.*;
 import mindustry.world.blocks.defense.turrets.*;
+import mindustry.world.blocks.production.Drill;
 
 import static arc.Core.*; // фокусы
 import static mindustry.Vars.*;
@@ -33,8 +35,8 @@ import static mindustry.Vars.*;
 public class TileTurret extends Turret {
     public BulletType shootType;
     /** Время раскрутки стволов */
-    public float chargeTime = 90f;
-    public float chargeSpeed = 0.02F;
+    public float warmupTime = 90f;
+    public float warmupSpeed = 0.02F;
     /** Время активации турели */
     public float deployTime = 60f;
     public float deploySpeed;
@@ -86,7 +88,7 @@ public class TileTurret extends Turret {
     public class TileTurretBuild extends TurretBuild {
         public boolean activated = false;
         public Seq<TurretBarrel> barrels = new Seq<>();
-        public float deployProgress, chargeProcess = 0;
+        public float deployProgress, warmup = 0;
 
         public void activate() {
             activated = true;
@@ -124,24 +126,23 @@ public class TileTurret extends Turret {
         public void draw() {
             if (activated) {
                 Draw.z(Layer.block - 1);
-                //Draw.color(Color.black);
-                //Fill.square(x, y, size * tilesize / 2f);
-                //Draw.color();
-                Draw.color(Color.white.cpy().a(deployProgress / deployTime));
+                Draw.alpha(deployProgress / deployTime);
                 Draw.rect(shadowRegion, x, y); // костыль с динамическими тенями
-                Drawf.shadow(floor().region, x - size * 1.5f, y - size * 1.5f);
+                Floatf<Float> shadowShift = a -> (a - size * 1.5f) * deployProgress / deployTime;
+                Drawf.shadow(floor().region, shadowShift.get(x), shadowShift.get(y));
 
                 Draw.z(Layer.turret);
                 Draw.color();
                 barrels.each(this::drawBarrel);
-                //drawBarrel(barrels.first());
                 if(heatRegion != atlas.find("error")) barrels.each(this::drawBarrelHeat);
 
-                Draw.z(Layer.effect + 0.01f);
-                Draw.rect(floor().region, x, y); // отображаем верхушку только когда она... сверху (для правильной работы теней)
+                Draw.z(Layer.turret + 0.02f);
+                Draw.rect(floor().region, x, y);
                 //Draw.rect(outlineFrameRegion, x, y);
-                Draw.color(Color.coral.cpy().a(deployProgress / deployTime));
+                Draw.color(Color.coral);
+                Draw.alpha(deployProgress / deployTime);
                 Draw.rect(atlas.find("block-middle"), x, y);
+
                 Draw.reset();
             }
         }
@@ -190,6 +191,8 @@ public class TileTurret extends Turret {
                 }
 
                 if (activated) {
+                    //float delay *= this.efficiency();
+                    //warmup = Mathf.lerpDelta(this.warmup, delay, warmupSpeed);
                     if (validateTarget()) {
                         boolean canShoot = true;
 
@@ -284,7 +287,7 @@ public class TileTurret extends Turret {
                     tr.trns(rotation, size * tilesize / 2f, Mathf.range(xRand));
 
                     for(int i = 0; i < shots; i++){
-                        bullet(type, rotation + Mathf.range(inaccuracy + type.inaccuracy) + (i - (int)(shots / 2f)) * spread);
+                        ////bullet(type, rotation + Mathf.range(inaccuracy + type.inaccuracy) + (i - (int)(shots / 2f)) * spread);
                     }
                 }
 
@@ -302,8 +305,8 @@ public class TileTurret extends Turret {
 
             barrels.each(b -> {
                 tr.trns(b.baseAngle + rotation, size * tilesize / 2f + 3 /* корректировка позиции конца ствола */);
-                fshootEffect.at(x + tr.x, y + tr.y, b.baseAngle + rotation);
-                fsmokeEffect.at(x + tr.x, y + tr.y, b.baseAngle + rotation);
+                fshootEffect.layer(Layer.turret + 0.01f).at(x + tr.x, y + tr.y, b.baseAngle + rotation);
+                fsmokeEffect.layer(Layer.turret + 0.01f).at(x + tr.x, y + tr.y, b.baseAngle + rotation);
             });
             shootSound.at(x, y, Mathf.random(0.9f, 1.1f));
 
@@ -321,7 +324,7 @@ public class TileTurret extends Turret {
             if(!isValid()) return;
 
             barrels.each(b -> {
-                ammoUseEffect.at(
+                ammoUseEffect.layer(Layer.turret + 0.01f).at(
                         x - Angles.trnsx(b.baseAngle + rotation, ammoEjectBack - size * tilesize / 2f),
                         y - Angles.trnsy(b.baseAngle + rotation, ammoEjectBack - size * tilesize / 2f),
                         rotation + b.baseAngle
